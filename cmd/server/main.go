@@ -1,3 +1,4 @@
+// Package main entry point of the application. It sets up the environment, initializes the database connection-
 package main
 
 import (
@@ -11,6 +12,7 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/mytheresa/go-hiring-challenge/app/catalog"
+	"github.com/mytheresa/go-hiring-challenge/app/categories"
 	"github.com/mytheresa/go-hiring-challenge/app/database"
 	"github.com/mytheresa/go-hiring-challenge/models"
 )
@@ -32,16 +34,27 @@ func main() {
 		os.Getenv("POSTGRES_DB"),
 		os.Getenv("POSTGRES_PORT"),
 	)
-	defer close()
+
+	log.Println("Connected to database successfully")
+
+	defer func() {
+		if err := close(); err != nil {
+			log.Printf("Error closing database connection: %s", err)
+		}
+	}()
 
 	// Initialize handlers
 	prodRepo := models.NewProductsRepository(db)
-	cat := catalog.NewCatalogHandler(prodRepo)
+	catRepo := models.NewCategoryRepository(db)
 
+	catalogHandler := catalog.NewCatalogHandler(prodRepo)
+	categoryHandler := categories.NewCategoryHandler(catRepo)
 	// Set up routing
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /catalog", cat.HandleGet)
-
+	mux.HandleFunc("GET /catalog", catalogHandler.HandleGet)
+	mux.HandleFunc("GET /catalog/{code}", catalogHandler.HandleGetByCode)
+	mux.HandleFunc("GET /categories", categoryHandler.HandleList)
+	mux.HandleFunc("POST /categories", categoryHandler.HandleCreate)
 	// Set up the HTTP server
 	srv := &http.Server{
 		Addr:    fmt.Sprintf("localhost:%s", os.Getenv("HTTP_PORT")),

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -8,8 +9,15 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestOKResponse(t *testing.T) {
+type errorWriter struct {
+	http.ResponseWriter
+}
 
+func (e *errorWriter) Write(b []byte) (int, error) {
+	return 0, io.ErrClosedPipe
+}
+
+func TestOKResponse(t *testing.T) {
 	type sampleResponse struct {
 		Message string `json:"message"`
 	}
@@ -39,4 +47,30 @@ func TestErrorResponse(t *testing.T) {
 		expected := `{"error":"Some error occurred"}`
 		assert.JSONEq(t, expected, recorder.Body.String(), "Response body does not match expected")
 	})
+}
+
+func TestErrorResponse_EncodeError(t *testing.T) {
+	rr := httptest.NewRecorder()
+	ew := &errorWriter{rr}
+	ErrorResponse(ew, http.StatusBadRequest, string([]byte{0xff, 0xfe, 0xfd})) // invalid UTF-8
+
+	resp := rr.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusInternalServerError {
+		t.Errorf("expected status %d, got %d", http.StatusInternalServerError, resp.StatusCode)
+	}
+}
+
+func TestOkResponse_EncodeError(t *testing.T) {
+	rr := httptest.NewRecorder()
+	ew := &errorWriter{rr}
+	OKResponse(ew, string([]byte{0xff, 0xfe, 0xfd})) // invalid UTF-8
+
+	resp := rr.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusInternalServerError {
+		t.Errorf("expected status %d, got %d", http.StatusInternalServerError, resp.StatusCode)
+	}
 }

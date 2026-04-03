@@ -10,6 +10,9 @@ run ::
 test ::
 	@go test -v -count=1 -race ./... -coverprofile=coverage.out -covermode=atomic
 
+coverage::
+	@go tool cover -html=coverage.out
+
 docker-up ::
 	docker compose up -d
 
